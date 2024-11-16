@@ -1,0 +1,149 @@
+import random
+
+class Card:
+    def __init__(self, suit, rank):
+        self.suit = suit
+        self.rank = rank
+    
+    def __str__(self):
+        return f"{self.rank} of {self.suit}"
+
+class Deck:
+    def __init__(self):
+        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+        ranks = [str(i) for i in range(1, 14)]
+        self.cards = [Card(suit, rank) for suit in suits for rank in ranks] + ["Joker"] * 2
+        random.shuffle(self.cards)
+    
+    def draw_card(self):
+        return self.cards.pop() if self.cards else None
+
+class Player:
+    def __init__(self, name):
+        self.name = name
+        self.hand = []
+    
+    def draw(self, card):
+        self.hand.append(card)
+    
+    def discard(self, card):
+        self.hand.remove(card)
+        return card
+    
+    def show_hand(self):
+        return ", ".join(str(card) for card in self.hand)
+
+class IndianRummyGame:
+    def __init__(self, player_names):
+        self.deck = Deck()
+        self.players = [Player(name) for name in player_names]
+        self.discard_pile = []
+        self.current_player = 0
+    
+    def deal_cards(self):
+        for _ in range(13):
+            for player in self.players:
+                player.draw(self.deck.draw_card())
+    
+    def is_valid_sequence(self, sequence):
+        """Checks if a sequence is valid."""
+        if len(sequence) < 3:
+            return False
+        ranks = [int(card.rank) for card in sequence if isinstance(card, Card)]
+        return all(ranks[i] + 1 == ranks[i + 1] for i in range(len(ranks) - 1))
+    
+    def is_valid_set(self, set_):
+        """Checks if a set is valid."""
+        if len(set_) < 3:
+            return False
+        ranks = [card.rank for card in set_ if isinstance(card, Card)]
+        return len(set(ranks)) == 1
+    
+    def is_valid_declare(self, hand):
+        """Checks if the player's hand meets Indian Rummy rules."""
+        sequences = self.find_potential_sequences(hand)
+        sets = self.find_potential_sets(hand)
+        
+        # Check for at least one pure sequence
+        pure_sequences = [seq for seq in sequences.values() if self.is_valid_sequence(seq)]
+        if not pure_sequences:
+            return False
+        
+        # Remove pure sequence from hand for further checks
+        used_cards = set(pure_sequences[0])
+        remaining_hand = [card for card in hand if card not in used_cards]
+        
+        # Check for other valid sequences and sets
+        remaining_sequences = self.find_potential_sequences(remaining_hand)
+        remaining_sets = self.find_potential_sets(remaining_hand)
+        
+        valid_combinations = sum(len(seq) >= 3 for seq in remaining_sequences.values()) + \
+                             sum(len(set_) >= 3 for set_ in remaining_sets.values())
+        
+        return valid_combinations >= (len(remaining_hand) // 3)
+    
+    def find_potential_sequences(self, hand):
+        sequences = {}
+        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+        for suit in suits:
+            cards = sorted([card for card in hand if isinstance(card, Card) and card.suit == suit],
+                           key=lambda x: int(x.rank))
+            sequence = []
+            for card in cards:
+                if not sequence or int(sequence[-1].rank) + 1 == int(card.rank):
+                    sequence.append(card)
+                else:
+                    if len(sequence) >= 3:
+                        sequences[suit] = sequence
+                    sequence = [card]
+            if len(sequence) >= 3:
+                sequences[suit] = sequence
+        return sequences
+    
+    def find_potential_sets(self, hand):
+        ranks = {}
+        for card in hand:
+            if isinstance(card, Card):
+                ranks.setdefault(card.rank, []).append(card)
+        sets = {rank: cards for rank, cards in ranks.items() if len(cards) >= 3}
+        return sets
+    
+    def ai_turn(self, player):
+        print(f"{player.name}'s turn")
+        card_drawn = self.deck.draw_card()
+        if card_drawn:
+            print(f"AI drew {card_drawn}")
+            player.draw(card_drawn)
+        
+        potential_sequences = self.find_potential_sequences(player.hand)
+        potential_sets = self.find_potential_sets(player.hand)
+        
+        ungrouped_cards = [card for card in player.hand if card not in sum(potential_sequences.values(), []) 
+                           and card not in sum(potential_sets.values(), [])]
+        
+        if ungrouped_cards:
+            ungrouped_cards.sort(key=lambda x: int(x.rank) if isinstance(x, Card) else 0)
+            discarded_card = ungrouped_cards[-1]
+        else:
+            discarded_card = random.choice(player.hand)
+        
+        self.discard_pile.append(player.discard(discarded_card))
+        print(f"AI discarded {discarded_card}")
+    
+    def play_game(self):
+        self.deal_cards()
+        while True:
+            player = self.players[self.current_player]
+            if isinstance(player, Player):
+                self.ai_turn(player)
+            
+            if self.is_valid_declare(player.hand):
+                print(f"{player.name} declares and wins!")
+                break
+            
+            self.current_player = (self.current_player + 1) % len(self.players)
+
+# Example usage
+if __name__ == "__main__":
+    game = IndianRummyGame(["AI Bot"])
+    game.play_game()
